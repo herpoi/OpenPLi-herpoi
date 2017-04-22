@@ -14,6 +14,8 @@ from Components.SystemInfo import SystemInfo
 from Components.UsageConfig import preferredInstantRecordPath, defaultMoviePath
 from Components.VolumeControl import VolumeControl
 from Components.Sources.StaticText import StaticText
+from Components.Pixmap import Pixmap
+from Components.Renderer.Picon import getPiconName
 from EpgSelection import EPGSelection
 from Plugins.Plugin import PluginDescriptor
 
@@ -225,12 +227,14 @@ class InfoBarShowHide(InfoBarScreenSaver):
 	STATE_HIDING = 1
 	STATE_SHOWING = 2
 	STATE_SHOWN = 3
+	STATE_EPG = 4
 	FLAG_HIDE_VBI = 512
 
 	def __init__(self):
 		self["ShowHideActions"] = ActionMap( ["InfobarShowHideActions"] ,
 			{
 				"toggleShow": self.okButtonCheck,
+				"toggleShowInfo": self.toggleShow,
 				"hide": self.keyHide,
 				"toggleShowLong" : self.toggleShowLong,
 				"hideLong" : self.hideLong,
@@ -313,8 +317,8 @@ class InfoBarShowHide(InfoBarScreenSaver):
 				self.session.openWithCallback(self.hidePipOnExitCallback, MessageBox, _("Disable Picture in Picture"), simple=True)
 			else:
 				self.hidePipOnExitCallback(True)
-		elif config.usage.ok_is_channelselection.value and hasattr(self, "openServiceList"):
-			self.toggleShow()
+#		elif config.usage.ok_is_channelselection.value and hasattr(self, "openServiceList"):
+#			self.toggleShow()
 		elif self.__state == self.STATE_SHOWN:
 			self.hide()
 
@@ -355,6 +359,12 @@ class InfoBarShowHide(InfoBarScreenSaver):
 		if self.__state == self.STATE_SHOWN:
 			self.hide()
 
+	def epg(self):
+		self.__state = self.STATE_EPG
+		self.hide()
+		self.hideTimer.stop()
+		self.openEventView()
+
 	def okButtonCheck(self):
 		if config.usage.ok_is_channelselection.value and hasattr(self, "openServiceList"):
 			if isinstance(self, InfoBarTimeshift) and self.timeshiftEnabled() and isinstance(self, InfoBarSeek) and self.seekstate == self.SEEK_STATE_PAUSE:
@@ -377,7 +387,9 @@ class InfoBarShowHide(InfoBarScreenSaver):
 			self.show()
 			self.actualSecondInfoBarScreen.show()
 			self.startHideTimer()
-		else:
+		elif self.__state == self.STATE_SHOWN:
+			self.epg()
+		elif self.__state == self.STATE_EPG:
 			self.hide()
 			self.hideTimer.stop()
 
@@ -483,6 +495,12 @@ class NumberZap(Screen):
 			if not self.startBouquet:
 				self.startBouquet = self.bouquet
 
+	def handlePicon(self):
+		if self.service is not None:
+			sname = self.service.toString()
+			pngname = getPiconName(sname)
+			self["picon"].instance.setPixmapFromFile(pngname)
+
 	def keyBlue(self):
 		self.startTimer()
 		if self.searchNumber:
@@ -498,6 +516,7 @@ class NumberZap(Screen):
 		self["number"].text = self["number_summary"].text = self.numberString
 
 		self.handleServiceName()
+		self.handlePicon()
 
 		if len(self.numberString) >= 5:
 			self.keyOK()
@@ -514,7 +533,7 @@ class NumberZap(Screen):
 		self["channel_summary"] = StaticText(_("Channel:"))
 		self["number_summary"] = StaticText(self.numberString)
 		self["servicename_summary"] = StaticText()
-
+		self["picon"] = Pixmap()
 		self.handleServiceName()
 
 		self["actions"] = NumberActionMap( [ "SetupActions", "ShortcutActions" ],
@@ -539,6 +558,14 @@ class NumberZap(Screen):
 		self.Timer.start(250)
 		self.startTimer()
 
+	def onLayoutReady(self):
+			self.updateData()
+			self.startTimer()
+
+	def updateData(self):
+		self.handleServiceName()
+		self.handlePicon()
+		
 	def startTimer(self, repeat=False):
 		self.timer_target = repeat and self.timer_counter < 6 and [4,4,4,5,8,10][self.timer_counter] or 12
 		self.timer_counter = 0
@@ -547,6 +574,8 @@ class NumberZap(Screen):
 		self.timer_counter += 1
 		if self.timer_counter > self.timer_target:
 			self.keyOK()
+
+		self.onLayoutFinish.append(self.handlePicon)
 
 class InfoBarNumberZap:
 	""" Handles an initial number for NumberZapping """
@@ -658,6 +687,7 @@ class InfoBarChannelSelection:
 				"historyNext": (self.historyNext, _("Switch to next channel in history")),
 				"keyChannelUp": (self.keyChannelUpCheck, self.getKeyChannelUpHelptext),
 				"keyChannelDown": (self.keyChannelDownCheck, self.getKeyChannelDownHelptext),
+				"openServiceList": (self.openServiceList, _("Open service list")), 	
 			})
 
 	def showTvChannelList(self, zap=False):
@@ -975,6 +1005,8 @@ class InfoBarEPG:
 				"showEventInfoSingleEPG": (self.showSingleEPG, _("Show single service EPG")),
 				"showEventInfoMultiEPG": (self.showMultiEPG, _("Show multi channel EPG")),
 				"showInfobarOrEpgWhenInfobarAlreadyVisible": self.showEventInfoWhenNotVisible,
+				"showSingleEPG": self.openSingleServiceEPG,
+				"showMultiEPG": self.openMultiServiceEPG,
 			})
 
 	def getEPGPluginList(self, getAll=False):

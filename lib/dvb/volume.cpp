@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <lib/base/nconfig.h>
 
 #include <linux/dvb/version.h>
 #if DVB_API_VERSION < 3
@@ -38,7 +39,7 @@ eDVBVolumecontrol* eDVBVolumecontrol::getInstance()
 }
 
 eDVBVolumecontrol::eDVBVolumecontrol()
-:m_volsteps(5)
+:m_volsteps(eConfigManager::getConfigIntValue("config.usage.volumestep"))
 {
 #ifdef HAVE_ALSA
 	mainVolume = NULL;

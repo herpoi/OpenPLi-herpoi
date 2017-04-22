@@ -180,6 +180,13 @@ class MovieList(GUIComponent):
 		self._playInBackground = None
 		self._char = ''
 
+		self.lang = language.getLanguage()
+		try:
+			locale.setlocale(locale.LC_COLLATE, self.lang)
+			self.useLocale=True
+		except:
+			self.useLocale=False
+
 		if root is not None:
 			self.reload(root)
 
@@ -750,6 +757,8 @@ class MovieList(GUIComponent):
 		# x = ref,info,begin,...
 		ref = x[0]
 		name = x[1] and x[1].getName(ref)
+		if self.useLocale and name is not None:
+			name = locale.strxfrm(name)
 		if ref.flags & eServiceReference.mustDescent:
 			return (0, name and name.lower() or "", -x[2])
 		return (1, name and name.lower() or "", -x[2])
@@ -767,6 +776,8 @@ class MovieList(GUIComponent):
 			name = p[1]
 		# print "Sorting for -%s-" % name
 
+		if self.useLocale and name is not None:
+			name = locale.strxfrm(name)
 		return (1, name and name.lower() or "", -x[2])
 
 	def buildBeginTimeSortKey(self, x):
